@@ -26,7 +26,11 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-setsid env CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-solo ENABLE_DISAGGREGATION=false \
+# EXO_NO_BATCH=1 -> SequentialGenerator. exo's continuous-batching BatchGenerator
+# adds ~30ms/token of overhead for a SINGLE request (it pays off only with many
+# concurrent requests); sequential is ~60% faster for one-at-a-time chat. Set the
+# same env on whichever node runs DECODE (the Mac, in the disaggregated 8-bit setup).
+setsid env CUDA_VISIBLE_DEVICES=0 EXO_NO_BATCH=1 EXO_HOME=.exo-solo ENABLE_DISAGGREGATION=false \
   uv run exo --namespace solo5070 \
   --zenoh-port 52414 --discovery-port 52413 --api-port 52415 &
 PGID=$!

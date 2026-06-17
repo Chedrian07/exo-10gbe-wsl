@@ -300,13 +300,19 @@ def pipeline_auto_parallel(
         mx.clear_cache()
         yield ModelLoadingResponse(layers_loaded=i, total=total)
 
-    layers[0] = PipelineFirstLayer(layers[0], device_rank, group=group)
-    layers[-1] = PipelineLastLayer(
-        layers[-1],
-        device_rank,
-        world_size,
-        group=group,
-    )
+    # A single-device instance has no pipeline to coordinate. Wrapping the
+    # first/last layers would still execute, per token during decode, a
+    # mx.distributed.all_gather plus two forced mx.eval calls in
+    # PipelineLastLayer.__call__ — which breaks MLX's async-eval pipelining and
+    # roughly halves decode throughput. Skip wrapping entirely when world_size == 1.
+    if world_size > 1:
+        layers[0] = PipelineFirstLayer(layers[0], device_rank, group=group)
+        layers[-1] = PipelineLastLayer(
+            layers[-1],
+            device_rank,
+            world_size,
+            group=group,
+        )
 
     if isinstance(inner_model_instance, GptOssMoeModel):
         inner_model_instance.layer_types = inner_model_instance.layer_types[
