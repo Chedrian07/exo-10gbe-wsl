@@ -27,6 +27,19 @@ dependencies = [
   "zstandard>=0.23.0",
   "transformers>=5.6.2",
   "python-daemon>=3.1.2",
+  # --- WSL2 / CUDA 13 전용 추론 백엔드 (이 fork 한정) ---
+  # 이 fork는 linux-cuda 노드에서 `uv sync`만으로 mlx-cuda 스택이 설치되도록
+  # mlx 백엔드를 필수 의존성으로 박는다. 모두 sys_platform == 'linux' 마커라
+  # darwin(Mac)에서는 제외된다 → Mac은 brew 설치본 사용 전제.
+  # torch 가 여기 포함되어 vision(VL) 모델 가중치 로딩(safe_open framework="pt")도 동작한다.
+  "mlx==0.32.0 ; sys_platform == 'linux'",
+  "mlx-lm ; sys_platform == 'linux'",
+  "mlx-vlm>=0.3.11 ; sys_platform == 'linux'",
+  "mlx-cuda-13==0.32.0 ; sys_platform == 'linux'",
+  "nvidia-ml-py>=13.595.45 ; sys_platform == 'linux'",
+  "torch==2.10.0 ; sys_platform == 'linux'",
+  "torchvision==0.25.0 ; sys_platform == 'linux'",
+  "torchaudio==2.10.0 ; sys_platform == 'linux'",
 ]
 
 [project.scripts]
@@ -95,20 +108,15 @@ mlx-cuda-13 = [
 ]
 mlx-lm = { git = "https://github.com/rltakashige/mlx-lm", branch = "leo/deepseek-v4" }
 mflux = { git = "https://github.com/evanev7/mflux", branch = "exo2" }
+# 이 fork는 CUDA 13 전용 → linux torch 스택을 cu130 인덱스로 고정.
 torch = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'linux' and extra == 'mlx-cpu' and extra != 'mlx-cuda13' and extra != 'mlx-cuda12'" },
-  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and extra == 'mlx-cuda12' and extra != 'mlx-cuda13' " },
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux' and extra == 'mlx-cuda13'" },
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
 ]
 torchvision = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'linux' and extra == 'mlx-cpu' and extra != 'mlx-cuda13' and extra != 'mlx-cuda12'" },
-  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and extra == 'mlx-cuda12' and extra != 'mlx-cuda13'" },
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux' and extra == 'mlx-cuda13'" },
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
 ]
 torchaudio = [
-  { index = "pytorch-cpu", marker = "sys_platform == 'linux' and extra == 'mlx-cpu' and extra != 'mlx-cuda13' and extra != 'mlx-cuda12'" },
-  { index = "pytorch-cu128", marker = "sys_platform == 'linux' and extra == 'mlx-cuda12' and extra != 'mlx-cuda13'" },
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux' and extra == 'mlx-cuda13'" },
+  { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
 ]
 
 [[tool.uv.index]]
