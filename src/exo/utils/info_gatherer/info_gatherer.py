@@ -5,7 +5,7 @@ import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from subprocess import CalledProcessError
-from typing import Self, cast
+from typing import Protocol, Self, cast, runtime_checkable
 
 import anyio
 from anyio import fail_after, open_process, to_thread
@@ -41,6 +41,18 @@ from .system_info import (
 )
 
 IS_DARWIN = sys.platform == "darwin"
+
+
+@runtime_checkable
+class _NvmlMemoryInfo(Protocol):
+    """Structural type for the object returned by nvmlDeviceGetMemoryInfo.
+
+    pynvml's stubs leave the return type as Unknown; this Protocol lets us
+    cast the result and keep strict type-checking happy.
+    """
+
+    total: int
+    free: int
 
 
 async def _get_thunderbolt_devices() -> set[str] | None:
@@ -356,7 +368,7 @@ async def _gather_iface_map() -> dict[str, str] | None:
 
 def _has_nvml_cuda() -> bool:
     try:
-        import pynvml as nvml  # pyright: ignore[reportMissingModuleSource]
+        import pynvml as nvml
     except ImportError:
         return False
     try:
@@ -367,6 +379,62 @@ def _has_nvml_cuda() -> bool:
             nvml.nvmlShutdown()
     except Exception:
         return False
+
+
+def _cuda_vram_bytes() -> tuple[int, int] | None:
+    """Return (total_vram_bytes, free_vram_bytes) for the CUDA device this process uses.
+
+    Device selection follows CUDA_VISIBLE_DEVICES semantics:
+    - If CUDA_VISIBLE_DEVICES is unset -> physical device 0.
+    - If set to a comma-separated list of integers -> use the first entry
+      (pynvml indices are physical device indices, not CUDA virtual indices).
+    - If set to any non-integer value (e.g. "NoDevFiles") -> return None.
+
+    Returns None on Darwin, on any import/init failure, or if no devices are
+    present.  All exceptions are silently swallowed so this never crashes the
+    monitor loop.
+    """
+    if IS_DARWIN:
+        return None
+    try:
+        import pynvml as nvml
+    except ImportError:
+        return None
+    try:
+        nvml.nvmlInit()
+        try:
+            device_count: int = int(nvml.nvmlDeviceGetCount())
+            if device_count == 0:
+                return None
+
+            # Resolve the physical device index from CUDA_VISIBLE_DEVICES.
+            physical_index: int = 0
+            cuda_visible = os.getenv("CUDA_VISIBLE_DEVICES")
+            if cuda_visible is not None:
+                # Take only the first entry from a comma-separated list.
+                first_entry = cuda_visible.split(",")[0].strip()
+                try:
+                    physical_index = int(first_entry)
+                except ValueError:
+                    # Non-integer value (e.g. GPU UUID or "NoDevFiles") --
+                    # we cannot safely map it, so fall back to None.
+                    return None
+
+            if physical_index < 0 or physical_index >= device_count:
+                return None
+
+            handle = nvml.nvmlDeviceGetHandleByIndex(physical_index)
+            mem_info = cast(
+                _NvmlMemoryInfo,
+                nvml.nvmlDeviceGetMemoryInfo(handle),  # pyright: ignore[reportUnknownMemberType]
+            )
+            total: int = mem_info.total
+            free: int = mem_info.free
+            return (total, free)
+        finally:
+            nvml.nvmlShutdown()
+    except Exception:
+        return None
 
 
 class NodeBackends(TaggedModel):
@@ -518,11 +586,31 @@ class InfoGatherer:
             if override_memory_env
             else None
         )
+        # Determine once at startup which memory source to use for each poll.
+        # Precedence: OVERRIDE_MEMORY_MB > CUDA VRAM > system RAM.
+        # CUDA VRAM is only attempted on non-Darwin nodes when no override is set.
+        use_cuda_vram: bool = (
+            not IS_DARWIN and override_memory is None and _cuda_vram_bytes() is not None
+        )
         while True:
             try:
-                await self.info_sender.send(
-                    MemoryUsage.from_psutil(override_memory=override_memory)
-                )
+                memory_usage: MemoryUsage
+                if override_memory is not None:
+                    memory_usage = MemoryUsage.from_psutil(
+                        override_memory=override_memory
+                    )
+                elif use_cuda_vram:
+                    vram = _cuda_vram_bytes()
+                    if vram is not None:
+                        memory_usage = MemoryUsage.from_cuda_vram(
+                            vram_total=vram[0], vram_free=vram[1]
+                        )
+                    else:
+                        # NVML became unavailable at runtime — fall back to system RAM.
+                        memory_usage = MemoryUsage.from_psutil(override_memory=None)
+                else:
+                    memory_usage = MemoryUsage.from_psutil(override_memory=None)
+                await self.info_sender.send(memory_usage)
             except Exception as e:
                 logger.opt(exception=e).warning("Error gathering memory usage")
             await anyio.sleep(memory_poll_rate)
