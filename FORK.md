@@ -67,7 +67,7 @@ Extends upstream's single-rank disaggregation so a pipeline-parallel prefill ins
 | file | what | risk | PR? |
 |---|---|---|---|
 | `src/exo/shared/types/text_generation.py` | `prefill_endpoint: str\|None` → `prefill_endpoints: list[str]`. | **high** | maybe |
-| `src/exo/master/main.py` | `_prefill_endpoint_for` → `_prefill_endpoints_for` (returns all reachable rank endpoints, validates completeness); injects the list into task params. | **high** | maybe |
+| `src/exo/master/main.py` | `_prefill_endpoint_for` → `_prefill_endpoints_for` (returns all reachable rank endpoints, validates completeness); injects the list into task params. PLUS `compute_auto_disaggregation_links` + `_auto_disaggregate` in the `_plan` loop: auto-link a CUDA instance (prefill) to a same-model Metal instance (decode) by default. | **high** | maybe |
 | `src/exo/worker/engines/mlx/generator/remote_prefill.py` | concurrent `ThreadPoolExecutor` fan-out to all ranks + merge by global layer index (sequential fetch would deadlock the pipeline collective). | med | maybe |
 | `src/exo/worker/engines/mlx/disaggregated/adapter.py` | `layer_offset`/`total_layers` → global layer indices on the wire. | med | yes |
 | `src/exo/worker/engines/base.py`, `worker/runner/llm_inference/batch_generator.py`, `worker/engines/image/builder.py` | `serve_prefill` signature gains `layer_offset`/`total_layers` (keyword-only, default 0/None). | low | yes |
@@ -104,7 +104,7 @@ Extends upstream's single-rank disaggregation so a pipeline-parallel prefill ins
 ## Env flags that gate fork behaviour
 | flag | effect |
 |---|---|
-| `ENABLE_DISAGGREGATION` | turns on the disaggregated prefill→decode path (incl. all of category C). |
+| `ENABLE_DISAGGREGATION` | turns on the disaggregated prefill→decode path (incl. all of category C) AND auto role assignment (the master auto-links a CUDA instance as prefill for a same-model Mac decode instance). |
 | `EXO_CONNECT_PEERS` / `--connect-peer` | manual peer dialing (category B). |
 | `OVERRIDE_MEMORY_MB` | overrides reported node memory; wins over CUDA-VRAM/system-RAM (category D). |
 | `CUDA_VISIBLE_DEVICES` | selects which GPU `_cuda_vram_bytes()` reports + pins MLX-CUDA to one GPU. |
