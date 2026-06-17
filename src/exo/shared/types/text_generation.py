@@ -132,7 +132,11 @@ class TextGenerationTaskParams(BaseModel, frozen=True):
     images: list[Base64Image] = Field(default_factory=list)
     image_hashes: dict[int, Base64ImageHash] = Field(default_factory=dict)
 
-    prefill_endpoint: str | None = None
+    # One endpoint per rank of the linked prefill instance. A pipeline-parallel
+    # prefill instance exposes one server per rank (each holding a disjoint layer
+    # range); the decode side fetches from all of them and merges by global layer
+    # index. Empty means "prefill locally" (no disaggregation).
+    prefill_endpoints: list[str] = Field(default_factory=list)
 
     def with_card_sampling_defaults(self) -> "TextGenerationTaskParams":
         from exo.shared.models import model_cards

@@ -40,7 +40,14 @@ class Engine(ABC):
     def close(self) -> None: ...
 
     @abstractmethod
-    def serve_prefill(self, request: PrefillRequest, wfile: BinaryIO) -> None: ...
+    def serve_prefill(
+        self,
+        request: PrefillRequest,
+        wfile: BinaryIO,
+        *,
+        layer_offset: int = 0,
+        total_layers: int | None = None,
+    ) -> None: ...
 
 
 class Builder(ABC):

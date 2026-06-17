@@ -97,9 +97,16 @@ def send_mlx_kv_cache(
     dtype: DType,
     start_pos: int = 0,
     max_tokens: int | None = None,
+    layer_offset: int = 0,
 ) -> int:
+    # ``layer_offset`` is the global index of this shard's first layer. In a
+    # pipeline-parallel prefill instance each rank holds a disjoint slice of the
+    # model's layers, so the wire ``layer_idx`` must be the GLOBAL layer index
+    # (``layer_offset + local index``) for the decode side to merge ranks
+    # correctly. For a single-rank instance ``layer_offset`` is 0.
     tokens_sent = 0
-    for layer_idx, c in enumerate(caches):
+    for local_layer_idx, c in enumerate(caches):
+        layer_idx = layer_offset + local_layer_idx
         match c:
             case QuantizedKVCache() | CacheList() | DeepseekV4Cache():
                 raise NotImplementedError
@@ -215,19 +222,27 @@ def write_cache_to_wire(
     request_id: str = "",
     model_id: str = "",
     start_pos: int = 0,
+    layer_offset: int = 0,
+    total_layers: int | None = None,
 ) -> int:
+    # ``layer_offset`` / ``total_layers`` describe this shard's place in a
+    # pipeline-parallel prefill instance: the header advertises the GLOBAL layer
+    # count and each chunk carries its global layer index. Defaults reproduce the
+    # single-rank behaviour (offset 0, num_layers == len(cache)).
     dtype = wire_dtype_from_cache(cache)
     write_header(
         wfile,
         Header(
             request_id=request_id,
             model_id=model_id,
-            num_layers=len(cache),
+            num_layers=total_layers if total_layers is not None else len(cache),
             dtype=dtype,
             start_pos=start_pos,
         ),
     )
-    tokens_sent = send_mlx_kv_cache(wfile, cache, dtype=dtype, start_pos=start_pos)
+    tokens_sent = send_mlx_kv_cache(
+        wfile, cache, dtype=dtype, start_pos=start_pos, layer_offset=layer_offset
+    )
     write_done(wfile, tokens_sent)
     wfile.flush()
     return tokens_sent

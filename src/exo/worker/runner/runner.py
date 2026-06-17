@@ -128,8 +128,11 @@ class Runner:
     def _start_prefill_server(self) -> int | None:
         if not ENABLE_DISAGGREGATION:
             return None
-        if self.device_rank != 0:
-            return None
+        # Every rank of a (pipeline-parallel) prefill instance serves its own
+        # layers' KV cache: rank N holds the global layer range
+        # [start_layer, end_layer), so the decode side fetches from all ranks and
+        # merges by global layer index. For a single-rank instance this is just
+        # the one server, unchanged.
         if self._prefill_server_port is not None:
             return self._prefill_server_port
 
@@ -180,7 +183,12 @@ class Runner:
         req.started.set()
         try:
             assert isinstance(self.generator, Engine)
-            self.generator.serve_prefill(req.request, req.wfile)
+            self.generator.serve_prefill(
+                req.request,
+                req.wfile,
+                layer_offset=self.shard_metadata.start_layer,
+                total_layers=self.shard_metadata.n_layers,
+            )
         except Exception:
             logger.opt(exception=True).warning(
                 f"Failed to serve prefill request {req.request.request_id}"
