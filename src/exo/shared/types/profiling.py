@@ -39,6 +39,26 @@ class MemoryUsage(FrozenModel):
             swap_available=sm.free,
         )
 
+    @classmethod
+    def from_cuda_vram(cls, *, vram_total: int, vram_free: int) -> Self:
+        """Construct a MemoryUsage from CUDA GPU VRAM figures.
+
+        On CUDA nodes the memory cap that matters for model placement is VRAM,
+        not system RAM.  We therefore expose VRAM as the primary memory fields:
+          ram_total     = total VRAM of the selected GPU
+          ram_available = free VRAM of the selected GPU
+
+        Swap fields are set to 0.  Placement uses ram_available for headroom
+        checks, so setting swap to 0 is correct — GPU VRAM has no swap
+        analogue, and we do not want the master to over-count capacity.
+        """
+        return cls.from_bytes(
+            ram_total=vram_total,
+            ram_available=vram_free,
+            swap_total=0,
+            swap_available=0,
+        )
+
 
 class DiskUsage(FrozenModel):
     """Disk space usage for the models directory."""

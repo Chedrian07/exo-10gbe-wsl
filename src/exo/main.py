@@ -374,6 +374,7 @@ def main_inner(args: "Args"):
             "EXO_LIBP2P_NAMESPACE has been removed - use EXO_ZENOH_NAMESPACE instead"
         )
     logger.info(f"EXO_ZENOH_NAMESPACE: {os.getenv('EXO_ZENOH_NAMESPACE')}")
+    logger.info(f"Discovery namespace in use: {args.namespace}")
 
     if args.offline:
         logger.info("Running in OFFLINE mode — no internet checks, local models only")

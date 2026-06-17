@@ -133,13 +133,19 @@ class EventRouter:
                     if self._nack_cancel_scope:
                         self._nack_cancel_scope.cancel()
 
-                if not drained and (
+                # Whether or not we drained anything, if the buffer still holds
+                # events beyond next_idx_to_release there is a forward gap.
+                # Kick a fresh request immediately so cold-join catch-up does not
+                # wait for the next out-of-order live event to arrive.
+                forward_gap_exists = bool(buf.store)
+                if (not drained or forward_gap_exists) and (
                     self._nack_cancel_scope is None
                     or self._nack_cancel_scope.cancel_called
                 ):
-                    # Request the next index.
                     self._tg.start_soon(self._nack_request, buf.next_idx_to_release)
-                    continue
+                    if not drained:
+                        # Nothing to deliver; skip the delivery loop.
+                        continue
 
                 for idx, event in drained:
                     to_clear = set[int]()
