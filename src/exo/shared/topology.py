@@ -198,13 +198,39 @@ class Topology:
                 self._graph.remove_edge_from_index(conn_idx)
 
     def get_cycles(self) -> list[Cycle]:
-        """Get simple cycles in the graph, including singleton cycles"""
+        """Get simple cycles in the graph, including singleton cycles.
 
-        cycle_idxs = rx.simple_cycles(self._graph)
+        Connectivity is treated as BIDIRECTIONAL: a zenoh session is bidirectional
+        once established, so a single directed edge A->B is enough for A and B to
+        form a ring. This matters when a peer cannot be HTTP-probed back and only a
+        one-directional edge exists (e.g. a worker started with --no-api, or two
+        nodes on one host that cannot share an api port for probing). We mirror the
+        directed graph into a symmetric one, find its simple cycles, and dedupe by
+        node set so each distinct node group appears once.
+        """
+        symmetric: rx.PyDiGraph[NodeId, None] = rx.PyDiGraph()
+        index_map: dict[int, int] = {}
+        for vertex_index in self._graph.node_indices():
+            index_map[vertex_index] = symmetric.add_node(self._graph[vertex_index])
+        added_edges: set[tuple[int, int]] = set()
+        for source_index, sink_index in self._graph.edge_list():
+            mapped_source, mapped_sink = index_map[source_index], index_map[sink_index]
+            for edge in ((mapped_source, mapped_sink), (mapped_sink, mapped_source)):
+                if edge not in added_edges:
+                    added_edges.add(edge)
+                    _ = symmetric.add_edge(edge[0], edge[1], None)
+
         cycles: list[Cycle] = []
-        for cycle_idx in cycle_idxs:
-            cycle = Cycle(node_ids=[self._graph[idx] for idx in cycle_idx])
-            cycles.append(cycle)
+        seen_node_sets: set[frozenset[NodeId]] = set()
+        for cycle_idx in rx.simple_cycles(symmetric):
+            node_ids = [symmetric[idx] for idx in cycle_idx]
+            if len(node_ids) <= 1:
+                continue
+            node_set = frozenset(node_ids)
+            if node_set in seen_node_sets:
+                continue
+            seen_node_sets.add(node_set)
+            cycles.append(Cycle(node_ids=node_ids))
         for node_id in self.list_nodes():
             cycles.append(Cycle(node_ids=[node_id]))
         return cycles

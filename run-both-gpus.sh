@@ -1,8 +1,14 @@
 #!/bin/bash
 # Launch two exo GPU nodes on one WSL box for pipeline-parallel prefill.
-# GPU1 (4060 Ti) MUST start first so GPU0's --connect-peer 127.0.0.1:52424
-# succeeds — exo does not retry failed startup dials, so a race where GPU0
-# starts before GPU1 leaves a missing edge and breaks 2-node cycle formation.
+#
+# NOTE: the topology fix (bidirectional cycle detection) means start order no
+# longer matters — a single one-directional edge is enough to form a cycle, and
+# the --no-api node (GPU1) now joins cycles even though it cannot be HTTP-probed.
+# GPU1 is still started first (+ a short sleep) as belt-and-suspenders so both
+# --connect-peer dials land, but it is no longer required for correctness.
+#
+# Reminder: the topology/placement fix runs on the MASTER node, so make sure the
+# Mac (current master) is also on this branch.
 
 set -e
 

@@ -348,9 +348,16 @@ def find_ip_prioritised(
     Priority: ethernet > wifi > unknown > thunderbolt
     """
     ips = list(_find_connection_ip(node_id, other_node_id, cycle_digraph))
+    other_network = node_network.get(other_node_id, NodeNetworkInfo())
+    if not ips:
+        # No directed edge node_id -> other_node_id in the topology. The zenoh
+        # session is bidirectional, so the peer is still reachable — fall back to
+        # the peer's own advertised interface IPs. This is what makes a node that
+        # could not be HTTP-probed back (e.g. --no-api, or an unshareable api port
+        # for two nodes on one host) usable as a ring neighbour.
+        ips = [iface.ip_address for iface in other_network.interfaces]
     if not ips:
         return None
-    other_network = node_network.get(other_node_id, NodeNetworkInfo())
     ip_to_type = {
         iface.ip_address: iface.interface_type for iface in other_network.interfaces
     }

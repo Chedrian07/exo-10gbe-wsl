@@ -134,13 +134,14 @@ def test_filter_multiple_cycles_by_memory():
     # act
     filtered_cycles = filter_cycles_by_memory(cycles, node_memory, Memory.from_kb(1500))
 
-    # assert
-    assert len(filtered_cycles) == 1
-    assert len(filtered_cycles[0]) == 3
-    assert set(n for n in filtered_cycles[0]) == {
-        node_a_id,
-        node_b_id,
-        node_c_id,
+    # assert — connectivity is bidirectional, so every mutually-reachable pair is
+    # also a candidate cycle. With a 1500 KB requirement the qualifying groups are
+    # {A,C} and {B,C} (1500 KB each) plus {A,B,C} (2000 KB); {A,B} (1000 KB) is out.
+    filtered_sets = {frozenset(cycle.node_ids) for cycle in filtered_cycles}
+    assert filtered_sets == {
+        frozenset({node_a_id, node_c_id}),
+        frozenset({node_b_id, node_c_id}),
+        frozenset({node_a_id, node_b_id, node_c_id}),
     }
 
 
@@ -178,10 +179,49 @@ def test_get_smallest_cycles():
     # act
     smallest_cycles = get_smallest_cycles(cycles)
 
-    # assert
-    assert len(smallest_cycles) == 1
-    assert len(smallest_cycles[0]) == 2
-    assert set(n for n in smallest_cycles[0]) == {node_a_id, node_b_id}
+    # assert — connectivity is bidirectional, so all three mutually-reachable
+    # pairs form 2-node cycles, which are the smallest.
+    assert all(len(cycle) == 2 for cycle in smallest_cycles)
+    assert {frozenset(cycle.node_ids) for cycle in smallest_cycles} == {
+        frozenset({node_a_id, node_b_id}),
+        frozenset({node_a_id, node_c_id}),
+        frozenset({node_b_id, node_c_id}),
+    }
+
+
+def test_get_cycles_treats_one_directional_edges_as_bidirectional():
+    # A node that cannot be HTTP-probed back (e.g. a worker started with --no-api,
+    # or two nodes on one host that cannot share an api port) only ever appears as
+    # the SOURCE of edges. Connectivity must still be treated as bidirectional so
+    # that node can join placement rings.
+    mac = NodeId()
+    gpu0 = NodeId()
+    gpu1 = NodeId()  # the un-probeable node: only outbound edges
+
+    topology = Topology()
+    for node in (mac, gpu0, gpu1):
+        topology.add_node(node)
+    # mac <-> gpu0 (both probe each other); gpu1 -> mac and gpu1 -> gpu0 only.
+    topology.add_connection(
+        Connection(source=mac, sink=gpu0, edge=create_socket_connection(1))
+    )
+    topology.add_connection(
+        Connection(source=gpu0, sink=mac, edge=create_socket_connection(2))
+    )
+    topology.add_connection(
+        Connection(source=gpu1, sink=mac, edge=create_socket_connection(3))
+    )
+    topology.add_connection(
+        Connection(source=gpu1, sink=gpu0, edge=create_socket_connection(4))
+    )
+
+    node_sets = {
+        frozenset(cycle.node_ids) for cycle in topology.get_cycles() if len(cycle) != 1
+    }
+    # gpu1 has no inbound edge, yet it must still join 2-node and 3-node groups.
+    assert frozenset({gpu1, mac}) in node_sets
+    assert frozenset({gpu1, gpu0}) in node_sets
+    assert frozenset({mac, gpu0, gpu1}) in node_sets
 
 
 @pytest.mark.parametrize(
