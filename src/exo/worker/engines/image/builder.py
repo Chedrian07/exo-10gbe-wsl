@@ -179,7 +179,14 @@ class ImageEngine(Engine):
         with contextlib.suppress(NameError, AttributeError):
             del self.image_model
 
-    def serve_prefill(self, request: PrefillRequest, wfile: BinaryIO) -> None:
+    def serve_prefill(
+        self,
+        request: PrefillRequest,
+        wfile: BinaryIO,
+        *,
+        layer_offset: int = 0,
+        total_layers: int | None = None,
+    ) -> None:
         raise NotImplementedError() from None
 
     def _run_image_task(

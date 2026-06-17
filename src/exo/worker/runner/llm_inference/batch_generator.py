@@ -300,7 +300,14 @@ class SequentialGenerator(Engine):
     def close(self) -> None:
         del self.model, self.tokenizer, self.group
 
-    def serve_prefill(self, request: PrefillRequest, wfile: BinaryIO) -> None:
+    def serve_prefill(
+        self,
+        request: PrefillRequest,
+        wfile: BinaryIO,
+        *,
+        layer_offset: int = 0,
+        total_layers: int | None = None,
+    ) -> None:
         cache = run_prefill_for_request(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -314,6 +321,8 @@ class SequentialGenerator(Engine):
             request_id=request.request_id,
             model_id=request.model_id,
             start_pos=request.start_pos,
+            layer_offset=layer_offset,
+            total_layers=total_layers,
         )
 
 
@@ -555,7 +564,14 @@ class BatchGenerator(Engine):
         self._gen.close()
         del self.model, self.tokenizer, self.group
 
-    def serve_prefill(self, request: PrefillRequest, wfile: BinaryIO) -> None:
+    def serve_prefill(
+        self,
+        request: PrefillRequest,
+        wfile: BinaryIO,
+        *,
+        layer_offset: int = 0,
+        total_layers: int | None = None,
+    ) -> None:
         cache = run_prefill_for_request(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -569,4 +585,6 @@ class BatchGenerator(Engine):
             request_id=request.request_id,
             model_id=request.model_id,
             start_pos=request.start_pos,
+            layer_offset=layer_offset,
+            total_layers=total_layers,
         )

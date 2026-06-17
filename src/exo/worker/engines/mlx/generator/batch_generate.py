@@ -203,9 +203,8 @@ class ExoBatchGenerator:
             else contextlib.nullcontext()
         )
         uncached_count = len(prompt_tokens)
-        use_remote = (
-            uncached_count > REMOTE_PREFILL_MIN_TOKENS
-            and task_params.prefill_endpoint is not None
+        use_remote = uncached_count > REMOTE_PREFILL_MIN_TOKENS and bool(
+            task_params.prefill_endpoints
         )
 
         _prefill_tps: float = 0.0
@@ -213,13 +212,13 @@ class ExoBatchGenerator:
         cache_snapshots: list[CacheSnapshot] = []
         remote_prefilled = False
         with vision_ctx:
-            if use_remote and task_params.prefill_endpoint is not None:
+            if use_remote and task_params.prefill_endpoints:
                 try:
                     _prefill_tps, _prefill_tokens, cache_snapshots = remote_prefill(
                         prompt_tokens[:-1],
                         cache,
                         on_prefill_progress,
-                        endpoint=task_params.prefill_endpoint,
+                        endpoints=task_params.prefill_endpoints,
                         request_id=str(uuid.uuid4()),
                         model_id=str(task_params.model),
                         start_pos=prefix_hit_length,

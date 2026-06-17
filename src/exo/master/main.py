@@ -79,13 +79,21 @@ from exo.utils.event_buffer import MultiSourceBuffer
 from exo.utils.task_group import TaskGroup
 
 
-def _prefill_endpoint_for(state: State, decode_instance_id: InstanceId) -> str | None:
+def _prefill_endpoints_for(state: State, decode_instance_id: InstanceId) -> list[str]:
+    """Resolve the prefill server endpoints for a decode instance.
+
+    Returns one ``ip:port`` per rank of the chosen prefill instance. A
+    pipeline-parallel prefill instance has one server per rank (each holding a
+    disjoint layer range), so every rank must be reachable — a partial set would
+    transfer an incomplete KV cache. Picks the linked prefill instance with the
+    fewest in-flight tasks; returns ``[]`` if none is fully reachable.
+    """
     decode = state.instances.get(decode_instance_id)
     if decode is None:
-        return None
+        return []
     decode_node = next(iter(decode.shard_assignments.node_to_runner.keys()), None)
     if decode_node is None:
-        return None
+        return []
 
     sources: set[InstanceId] = set()
     for link in state.instance_links.values():
@@ -106,17 +114,23 @@ def _prefill_endpoint_for(state: State, decode_instance_id: InstanceId) -> str |
         instance = state.instances.get(src_id)
         if instance is None:
             continue
+        endpoints: list[str] = []
+        complete = True
         for node_id, runner_id in instance.shard_assignments.node_to_runner.items():
             port = state.prefill_server_ports.get(runner_id)
             if port is None:
-                continue
+                complete = False
+                break
             ip = find_ip_prioritised(
                 decode_node, node_id, state.topology, state.node_network, ring=True
             )
             if ip is None:
-                continue
-            return f"{ip}:{port}"
-    return None
+                complete = False
+                break
+            endpoints.append(f"{ip}:{port}")
+        if complete and endpoints:
+            return endpoints
+    return []
 
 
 class Master:
@@ -224,7 +238,7 @@ class Master:
                             task_id = TaskId()
                             params = command.task_params.model_copy(
                                 update={
-                                    "prefill_endpoint": _prefill_endpoint_for(
+                                    "prefill_endpoints": _prefill_endpoints_for(
                                         self.state, decode_instance_id
                                     ),
                                 }

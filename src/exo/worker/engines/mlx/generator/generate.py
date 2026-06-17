@@ -637,22 +637,21 @@ def mlx_generate(
         if vision is not None
         else contextlib.nullcontext()
     )
-    use_remote = (
-        len(prompt_tokens) > REMOTE_PREFILL_MIN_TOKENS
-        and task.prefill_endpoint is not None
+    use_remote = len(prompt_tokens) > REMOTE_PREFILL_MIN_TOKENS and bool(
+        task.prefill_endpoints
     )
     remote_prefilled = False
     prefill_tps = 0.0
     prefill_tokens = 0
     ssm_snapshots_list: list[CacheSnapshot] = []
     with maybe_vision_ctx:
-        if use_remote and task.prefill_endpoint is not None:
+        if use_remote and task.prefill_endpoints:
             try:
                 prefill_tps, prefill_tokens, ssm_snapshots_list = remote_prefill(
                     prompt_tokens[:-1],
                     caches,
                     on_prefill_progress,
-                    endpoint=task.prefill_endpoint,
+                    endpoints=task.prefill_endpoints,
                     request_id=str(uuid.uuid4()),
                     model_id=str(task.model),
                     start_pos=prefix_hit_length,

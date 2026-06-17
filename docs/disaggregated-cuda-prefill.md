@@ -141,27 +141,31 @@ as a **2‑node pipeline** across the two GPUs (layers split ~proportionally →
 No `OVERRIDE_MEMORY_MB` is required. MLX distributed uses `MlxRing` (TCP) for the two ranks; the
 boundary transfer is ~84MB/prefill (negligible).
 
-### Code change required (the real Tier‑2 work)
-The current disaggregated server only serves on **rank 0** (`src/exo/worker/runner/runner.py:131`),
-and in pipeline parallel rank 0's `cache` holds **only its own layers' KV**. So a multi‑rank prefill
-instance currently cannot transfer the *full* KV to the Mac. The change set:
+### Code change (implemented in this branch)
+Previously the disaggregated server served on **rank 0 only**, and in pipeline parallel rank 0's
+`cache` holds **only its own layers' KV** — so a multi‑rank prefill instance could not transfer the
+*full* KV. Implemented:
 
-1. **Serve on every rank.** Remove the `device_rank != 0` guard in `runner.py:_start_prefill_server`
-   so each rank exposes its layers. `state.prefill_server_ports` already keys by `runner_id`, so each
-   rank's port is already tracked (`src/exo/shared/apply.py:277`).
-2. **Emit GLOBAL layer indices.** Add a `layer_offset` to
-   `send_mlx_kv_cache` / `write_cache_to_wire` (`…/disaggregated/adapter.py`) so each rank writes
-   `layer_idx = global_offset + local_idx`, and set `Header.num_layers` to the **global** layer count.
-   The offset comes from the rank's pipeline layer range in `shard_metadata`.
-3. **Return all prefill endpoints.** `_prefill_endpoint_for` (`master/main.py:82`) currently returns
-   the first runner's `ip:port`; return the **list** of all prefill‑rank endpoints for the chosen
-   source instance.
-4. **Carry multiple endpoints on the task.** Generalize `prefill_endpoint: str | None` on the
-   text‑generation task params to a list.
-5. **Merge on decode.** In `remote_prefill` / `…/disaggregated/client.py`, connect to each prefill
-   endpoint, read its `Header`+`KVChunk`s+`Done`, and inject each chunk into the Mac's full cache by
-   its **global** `layer_idx` (`inject_kv_chunk` already indexes per layer). Treat per‑connection
-   `start_pos`/progress consistently.
+1. **Serve on every rank.** Dropped the `device_rank != 0` guard in `runner.py:_start_prefill_server`,
+   so each rank exposes its layers. `state.prefill_server_ports` already keys by `runner_id`.
+2. **Emit GLOBAL layer indices.** `send_mlx_kv_cache` / `write_cache_to_wire`
+   (`…/disaggregated/adapter.py`) take a `layer_offset` so each rank writes
+   `layer_idx = layer_offset + local_idx`, and `total_layers` sets `Header.num_layers` to the global
+   count. The runner passes `shard_metadata.start_layer` / `.n_layers` via `Engine.serve_prefill`.
+3. **Return all prefill endpoints.** `_prefill_endpoints_for` (`master/main.py`) returns the **list**
+   of every prefill‑rank `ip:port` for the chosen source, skipping sources where any rank is
+   unreachable (partial KV is useless).
+4. **Carry multiple endpoints on the task.** `prefill_endpoint: str | None` → `prefill_endpoints:
+   list[str]` on `TextGenerationTaskParams`; both decode paths (`generate.py`, `batch_generate.py`)
+   updated.
+5. **Merge on decode.** `remote_prefill` fetches every endpoint **concurrently** (pipeline prefill is
+   a collective — a sequential blocking fetch would deadlock), then merges the per‑rank
+   `PrefillResult`s by global `layer_idx` and injects once. Unit tests in
+   `…/disaggregated/tests/test_multirank_prefill.py` cover the global‑index wire format and the
+   multi‑server merge.
+
+**Still requires live‑cluster validation:** the actual MLX distributed pipeline collective across the
+two GPUs (the unit tests use stub servers, not a real `mx.distributed` group).
 
 ### Tier‑2 caveats
 - Pipeline bubble ≈ `(W−1)/(N+W−1)`; exo halves `prefill_step_size` for the group
@@ -181,8 +185,13 @@ instance currently cannot transfer the *full* KV to the Mac. The change set:
 - `src/exo/utils/info_gatherer/info_gatherer.py` + `src/exo/shared/types/profiling.py` — on a
   non‑Darwin CUDA node, report **GPU VRAM** (respecting `CUDA_VISIBLE_DEVICES`) as the node memory
   when `OVERRIDE_MEMORY_MB` is unset, so placement sizes GPUs correctly by default.
-- Tier 2 server/protocol/master/client changes above are **designed but pending live‑cluster
-  validation** (cannot be exercised without the Mac + both GPUs online).
+- Tier 2 multi‑rank KV streaming (serve‑on‑all‑ranks, global layer indices, all‑endpoint
+  resolution, list‑valued `prefill_endpoints`, concurrent fetch+merge on decode) is **implemented**
+  with unit tests; the real `mx.distributed` pipeline collective across the two GPUs still needs
+  live‑cluster validation. Touches: `worker/runner/runner.py`, `engines/base.py`,
+  `engines/image/builder.py`, `engines/mlx/disaggregated/adapter.py`,
+  `runner/llm_inference/batch_generator.py`, `engines/mlx/generator/{remote_prefill,generate,batch_generate}.py`,
+  `shared/types/text_generation.py`, `master/main.py`.
 
 ## Verification
 - Local: `uv run basedpyright && uv run ruff check && uv run pytest` (Tier‑1 fixes + new unit tests).
