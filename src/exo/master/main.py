@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 
 import anyio
@@ -16,7 +17,12 @@ from exo.routing.event_router import (
     EventRouterClosedResourceError,
 )
 from exo.shared.apply import apply
-from exo.shared.constants import EXO_EVENT_LOG_DIR, EXO_TRACING_ENABLED
+from exo.shared.constants import (
+    ENABLE_DISAGGREGATION,
+    EXO_EVENT_LOG_DIR,
+    EXO_TRACING_ENABLED,
+)
+from exo.shared.types.backends import Backend
 from exo.shared.types.commands import (
     AddCustomModelCard,
     CreateInstance,
@@ -57,7 +63,7 @@ from exo.shared.types.events import (
     TracesCollected,
     TracesMerged,
 )
-from exo.shared.types.instance_link import InstanceLink
+from exo.shared.types.instance_link import InstanceLink, InstanceLinkId
 from exo.shared.types.state import State
 from exo.shared.types.tasks import (
     ImageEdits as ImageEditsTask,
@@ -72,7 +78,7 @@ from exo.shared.types.tasks import (
 from exo.shared.types.tasks import (
     TextGeneration as TextGenerationTask,
 )
-from exo.shared.types.worker.instances import InstanceId
+from exo.shared.types.worker.instances import Instance, InstanceId
 from exo.utils.channels import Receiver, Sender
 from exo.utils.disk_event_log import DiskEventLog
 from exo.utils.event_buffer import MultiSourceBuffer
@@ -132,6 +138,67 @@ def _prefill_endpoints_for(state: State, decode_instance_id: InstanceId) -> list
         if complete and endpoints:
             return endpoints
     return []
+
+
+# FORK(exo-10gbe-wsl): auto role assignment — by default a CUDA instance serves
+# prefill for a same-model Metal (Mac) decode instance, so the GPU handles
+# KV-cache prefill without a manual instance-link.
+def compute_auto_disaggregation_links(
+    instances: Mapping[InstanceId, Instance],
+    node_backends: Mapping[NodeId, list[Backend]],
+    instance_links: Mapping[InstanceLinkId, InstanceLink],
+) -> list[InstanceLink]:
+    """For each model that has BOTH a CUDA-backed and a Metal-backed instance,
+    return a link making the CUDA instance(s) prefill and the Metal instance(s)
+    decode. Skips models whose CUDA instances are already linked (idempotent).
+    A premature link is harmless: ``_prefill_endpoints_for`` returns [] until the
+    prefill instance is reachable, so decode falls back to local prefill.
+    """
+
+    def backend_class(instance: Instance) -> str | None:
+        per_node = [
+            set(node_backends.get(node_id, []))
+            for node_id in instance.shard_assignments.node_to_runner
+        ]
+        if not per_node:
+            return None
+        if all(Backend.MlxCuda in backends for backends in per_node):
+            return "cuda"
+        if all(Backend.MlxMetal in backends for backends in per_node):
+            return "metal"
+        return None
+
+    by_model: dict[str, dict[str, list[InstanceId]]] = {}
+    for instance_id, instance in instances.items():
+        cls = backend_class(instance)
+        if cls is None:
+            continue
+        groups = by_model.setdefault(
+            str(instance.shard_assignments.model_id), {"cuda": [], "metal": []}
+        )
+        groups[cls].append(instance_id)
+
+    linked_prefill = {
+        instance_id
+        for link in instance_links.values()
+        for instance_id in link.prefill_instances
+    }
+    new_links: list[InstanceLink] = []
+    for groups in by_model.values():
+        prefill = groups["cuda"]
+        decode = groups["metal"]
+        if not prefill or not decode:
+            continue
+        if all(instance_id in linked_prefill for instance_id in prefill):
+            continue
+        new_links.append(
+            InstanceLink(
+                link_id=InstanceLinkId(),
+                prefill_instances=prefill,
+                decode_instances=decode,
+            )
+        )
+    return new_links
 
 
 class Master:
@@ -503,7 +570,29 @@ class Master:
                     logger.info(f"Manually removing node {node_id} due to inactivity")
                     await self.event_sender.send(NodeTimedOut(node_id=node_id))
 
+            # FORK(exo-10gbe-wsl): by default route prefill to CUDA GPUs
+            if ENABLE_DISAGGREGATION:
+                await self._auto_disaggregate()
+
             await anyio.sleep(10)
+
+    # FORK(exo-10gbe-wsl): auto role assignment — a CUDA instance serves prefill
+    # for a same-model Metal (Mac) decode instance, so the GPU handles KV-cache
+    # prefill by default without a manual instance-link. A premature link is
+    # harmless: if the prefill instance isn't reachable yet, _prefill_endpoints_for
+    # returns [] and decode falls back to local prefill.
+    async def _auto_disaggregate(self) -> None:
+        for link in compute_auto_disaggregation_links(
+            self.state.instances,
+            self.state.node_backends,
+            self.state.instance_links,
+        ):
+            logger.info(
+                "Auto-disaggregation: "
+                f"prefill={[str(i)[:8] for i in link.prefill_instances]} "
+                f"-> decode={[str(i)[:8] for i in link.decode_instances]}"
+            )
+            await self.event_sender.send(InstanceLinkCreated(link=link))
 
     async def _event_processor(self) -> None:
         with self.local_event_receiver as local_events:
