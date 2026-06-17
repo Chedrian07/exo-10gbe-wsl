@@ -104,10 +104,15 @@ class Router:
         namespace: str,
         listen_port: int,
         discovery_service_port: int,
+        connect_endpoints: list[str],
     ) -> "Router":
         return cls(
             handle=NetworkingHandle.new(
-                identity, namespace, listen_port, discovery_service_port
+                identity,
+                namespace,
+                listen_port,
+                discovery_service_port,
+                connect_endpoints,
             )
         )
 

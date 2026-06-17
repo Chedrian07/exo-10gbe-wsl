@@ -20,7 +20,11 @@ pub fn is_valid_zid(identity: &str) -> bool {
         && identity.len() <= 32
 }
 
-pub fn cfg(identity: &str, listen_port: u16) -> Result<zenoh::Config> {
+pub fn cfg(
+    identity: &str,
+    listen_port: u16,
+    connect_endpoints: &[String],
+) -> Result<zenoh::Config> {
     assert!(is_valid_zid(identity));
     assert!(identity.len() <= 32);
     assert!(listen_port != 0, "must used defined listen port");
@@ -29,6 +33,19 @@ pub fn cfg(identity: &str, listen_port: u16) -> Result<zenoh::Config> {
     cfg.insert_json5("id", &format!("\"{identity}\""))?;
     cfg.insert_json5("mode", "\"router\"")?;
     cfg.insert_json5("listen/endpoints", &format!("[\"tcp/[::]:{listen_port}\"]"))?;
+    // Manually-specified peer endpoints to dial on startup. Used when multicast
+    // discovery is unavailable (e.g. WSL2, cloud VPCs, cross-subnet links). Each
+    // entry is a full zenoh locator such as "tcp/192.168.0.2:52414". Once a single
+    // peer is reached, gossip scouting (enabled below) propagates the rest of the
+    // cluster, so listing one reachable node is enough.
+    if !connect_endpoints.is_empty() {
+        let joined = connect_endpoints
+            .iter()
+            .map(|endpoint| format!("\"{endpoint}\""))
+            .collect::<Vec<_>>()
+            .join(",");
+        cfg.insert_json5("connect/endpoints", &format!("[{joined}]"))?;
+    }
     cfg.insert_json5("scouting/multicast/enabled", "false")?;
     cfg.insert_json5("scouting/multicast/autoconnect", "[]")?;
     cfg.insert_json5("scouting/gossip/multihop", "true")?;

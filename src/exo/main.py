@@ -33,6 +33,31 @@ from exo.utils.task_group import TaskGroup
 from exo.worker.main import Worker
 
 
+def normalize_peer_endpoint(peer: str, default_port: int) -> str:
+    """Normalize a user-supplied ``--connect-peer`` value into a zenoh locator.
+
+    Accepts a bare host (``192.168.0.2``), host:port (``192.168.0.2:52414``),
+    a bracketed IPv6 address (``[fe80::1]`` / ``[fe80::1]:52414``), a bare IPv6
+    address, or an already-complete zenoh locator (anything containing ``/``,
+    e.g. ``tcp/1.2.3.4:52414``), which is passed through untouched. When no port
+    is present, ``default_port`` (the zenoh listen port) is appended.
+    """
+    peer = peer.strip()
+    # Already a full zenoh locator (has a protocol prefix) — trust the user.
+    if "/" in peer:
+        return peer
+    # Bracketed IPv6, optionally with a port.
+    if peer.startswith("["):
+        host = peer if "]:" in peer else f"{peer}:{default_port}"
+    # Bare IPv6 (multiple colons, no brackets) — bracket it and add the port.
+    elif peer.count(":") > 1:
+        host = f"[{peer}]:{default_port}"
+    # IPv4 / hostname, optionally with a port.
+    else:
+        host = peer if ":" in peer else f"{peer}:{default_port}"
+    return f"tcp/{host}"
+
+
 @dataclass
 class Node:
     router: Router
@@ -58,6 +83,10 @@ class Node:
             namespace=args.namespace,
             listen_port=args.zenoh_port,
             discovery_service_port=args.discovery_port,
+            connect_endpoints=[
+                normalize_peer_endpoint(peer, args.zenoh_port)
+                for peer in args.connect_peers
+            ],
         )
         await router.register_topic(topics.GLOBAL_EVENTS)
         await router.register_topic(topics.LOCAL_EVENTS)
@@ -390,6 +419,7 @@ class Args(FrozenModel):
     fast_synch: bool | None = None  # None = auto, True = force on, False = force off
     legacy_daemon: bool = False
     bootstrap_peers: list[str] = []
+    connect_peers: list[str] = []
     namespace: str
     zenoh_port: int
     discovery_port: int
@@ -463,6 +493,21 @@ class Args(FrozenModel):
             else [],
             dest="bootstrap_peers",
             help="Comma-separated libp2p multiaddrs to dial on startup (env: EXO_BOOTSTRAP_PEERS)",
+        )
+        parser.add_argument(
+            "--connect-peer",
+            type=lambda s: [p.strip() for p in s.split(",") if p.strip()],
+            default=os.getenv("EXO_CONNECT_PEERS", "").split(",")
+            if os.getenv("EXO_CONNECT_PEERS")
+            else [],
+            dest="connect_peers",
+            metavar="HOST[:PORT]",
+            help=(
+                "Comma-separated peers to dial directly on startup, bypassing multicast "
+                "discovery. PORT defaults to --zenoh-port. Accepts HOST, HOST:PORT, "
+                "[v6]:PORT, or a full zenoh locator (tcp/...). Use when auto-discovery "
+                "fails (e.g. WSL2, cloud, cross-subnet). (env: EXO_CONNECT_PEERS)"
+            ),
         )
         parser.add_argument(
             "--namespace",
