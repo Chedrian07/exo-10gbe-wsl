@@ -126,15 +126,28 @@ the full 27GB 8‑bit model fits in 16+16GB with **no paging**, then link it to 
 ### Operational shape
 Run **two** exo node‑processes on the WSL box, each pinned to one GPU, with separate data dirs/ports:
 ```bash
-# 5070 Ti node
+# 5070 Ti node — keeps the API on :52415
 CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-gpu0 ENABLE_DISAGGREGATION=true \
-  uv run exo --namespace mycluster --connect-peer 169.254.150.225 \
-  --api-port 52415 --zenoh-port 52414 --discovery-port 52413
-# 4060 Ti node
+  uv run exo --namespace mycluster \
+  --zenoh-port 52414 --discovery-port 52413 --api-port 52415 \
+  --connect-peer 169.254.150.225:52414,127.0.0.1:52424
+# 4060 Ti node — --no-api so it binds no API port
 CUDA_VISIBLE_DEVICES=1 EXO_HOME=.exo-gpu1 ENABLE_DISAGGREGATION=true \
-  uv run exo --namespace mycluster --connect-peer 169.254.150.225 \
-  --api-port 52416 --zenoh-port 52417 --discovery-port 52418
+  uv run exo --namespace mycluster --no-api \
+  --zenoh-port 52424 --discovery-port 52423 \
+  --connect-peer 169.254.150.225:52414,127.0.0.1:52414
 ```
+**Running two exo processes on one host — avoid port collisions:**
+- `--zenoh-port` is a TCP listener and **must differ** per process (52414 vs 52424). `--api-port`
+  must differ too, so the second worker uses `--no-api` (drive everything through the Mac's or the
+  first node's API). `--discovery-port` is bound `SO_REUSEPORT` so it *may* be shared, but distinct
+  values are clearer.
+- WSL2 blocks multicast discovery, so the two local nodes will **not** auto-discover each other —
+  each must `--connect-peer` the other (`127.0.0.1:<other zenoh-port>`) as well as the Mac.
+- **Always give an explicit port in `--connect-peer`** (`169.254.150.225:52414`): a bare host
+  defaults to the dialer's own `--zenoh-port`, which is wrong once the ports differ.
+- Separate `EXO_HOME` per process (distinct event log / downloads / lock files).
+
 With the auto‑VRAM reporting in this branch each CUDA node advertises ~16GB, so a *single* node is
 insufficient for the 27GB 8‑bit model and the master **automatically** places the prefill instance
 as a **2‑node pipeline** across the two GPUs (layers split ~proportionally → both fit under 16GB).
