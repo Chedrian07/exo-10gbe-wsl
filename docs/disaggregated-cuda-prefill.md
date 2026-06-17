@@ -126,7 +126,18 @@ Run the **prefill instance itself** as a 2‑node pipeline‑parallel group acro
 the full 27GB 8‑bit model fits in 16+16GB with **no paging**, then link it to the Mac decode instance.
 
 ### Operational shape
-Run **two** exo node‑processes on the WSL box, each pinned to one GPU, with separate data dirs/ports:
+Run **two** exo node‑processes on the WSL box, each pinned to one GPU, with separate data dirs/ports.
+**IMPORTANT: start GPU1 BEFORE GPU0.** exo does not retry failed startup dials, so GPU0's
+`--connect-peer 127.0.0.1:52424` will fail silently if GPU1 hasn't bound its port yet — this leaves
+a missing topology edge and prevents the 2‑node cycle that placement requires. Use the bundled
+launch script:
+
+```bash
+# Launches GPU1 first, waits 3s, then GPU0. Ctrl+C stops both.
+./run-both-gpus.sh
+```
+
+Or manually:
 ```bash
 # 5070 Ti node — keeps the API on :52415
 CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-gpu0 ENABLE_DISAGGREGATION=true \
