@@ -93,7 +93,9 @@ uv run exo --namespace mycluster --connect-peer 169.254.150.225
   For the 8‑bit‑paging variant only, add `OVERRIDE_MEMORY_MB=28000` (see "Model choice" above).
 
 ### Bring up the two instances and link them
-1. Inspect node/instance IDs: `curl localhost:52415/v1/state | jq` (look at `topology`, `instances`).
+1. Inspect node/instance IDs: `curl -s localhost:52415/state | jq 'keys'` (the route is `/state`,
+   not `/v1/state`; drill in with `/state/topology`, `/state/instances`). Check disaggregation is on
+   with `curl -s localhost:52415/v1/feature-flags`.
 2. Place the **decode** instance so it lands on the Mac, and the **prefill** instance so it lands on
    the CUDA node. Placement picks the smallest sufficient cycle, so pin explicitly when needed:
    - Preview a placement: `GET /placement?model_id=<id>&sharding=pipeline&min_nodes=1`.
