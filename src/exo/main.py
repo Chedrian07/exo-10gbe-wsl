@@ -33,6 +33,7 @@ from exo.utils.task_group import TaskGroup
 from exo.worker.main import Worker
 
 
+# FORK(exo-10gbe-wsl): helper to normalise --connect-peer values (bare host, host:port, IPv6, zenoh locator) into tcp/... form
 def normalize_peer_endpoint(peer: str, default_port: int) -> str:
     """Normalize a user-supplied ``--connect-peer`` value into a zenoh locator.
 
@@ -83,6 +84,7 @@ class Node:
             namespace=args.namespace,
             listen_port=args.zenoh_port,
             discovery_service_port=args.discovery_port,
+            # FORK(exo-10gbe-wsl): pass resolved peer locators to Router so WSL2/cloud nodes can connect without multicast
             connect_endpoints=[
                 normalize_peer_endpoint(peer, args.zenoh_port)
                 for peer in args.connect_peers
@@ -374,7 +376,9 @@ def main_inner(args: "Args"):
             "EXO_LIBP2P_NAMESPACE has been removed - use EXO_ZENOH_NAMESPACE instead"
         )
     logger.info(f"EXO_ZENOH_NAMESPACE: {os.getenv('EXO_ZENOH_NAMESPACE')}")
-    logger.info(f"Discovery namespace in use: {args.namespace}")
+    logger.info(
+        f"Discovery namespace in use: {args.namespace}"
+    )  # FORK(exo-10gbe-wsl): log resolved namespace to aid multi-node debugging
 
     if args.offline:
         logger.info("Running in OFFLINE mode — no internet checks, local models only")
@@ -420,6 +424,7 @@ class Args(FrozenModel):
     fast_synch: bool | None = None  # None = auto, True = force on, False = force off
     legacy_daemon: bool = False
     bootstrap_peers: list[str] = []
+    # FORK(exo-10gbe-wsl): new field for --connect-peer / EXO_CONNECT_PEERS (direct zenoh dial, bypasses multicast)
     connect_peers: list[str] = []
     namespace: str
     zenoh_port: int
@@ -495,6 +500,7 @@ class Args(FrozenModel):
             dest="bootstrap_peers",
             help="Comma-separated libp2p multiaddrs to dial on startup (env: EXO_BOOTSTRAP_PEERS)",
         )
+        # FORK(exo-10gbe-wsl): new --connect-peer CLI arg + EXO_CONNECT_PEERS env for static peer dialling
         parser.add_argument(
             "--connect-peer",
             type=lambda s: [p.strip() for p in s.split(",") if p.strip()],

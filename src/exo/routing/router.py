@@ -97,6 +97,7 @@ class TopicRouter[T: FrozenModel]:
 
 
 class Router:
+    # FORK(exo-10gbe-wsl): add connect_endpoints param so --connect-peer bypasses multicast discovery (needed for WSL2/cross-subnet)
     @classmethod
     def create(
         cls,

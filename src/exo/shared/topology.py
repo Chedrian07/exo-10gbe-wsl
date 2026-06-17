@@ -197,6 +197,7 @@ class Topology:
             if self._graph.get_edge_data_by_index(conn_idx) == conn.edge:
                 self._graph.remove_edge_from_index(conn_idx)
 
+    # FORK(exo-10gbe-wsl): treat connectivity as bidirectional so --no-api nodes (only outbound edges) can join placement rings
     def get_cycles(self) -> list[Cycle]:
         """Get simple cycles in the graph, including singleton cycles.
 

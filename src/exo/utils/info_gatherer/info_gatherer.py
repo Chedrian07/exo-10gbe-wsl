@@ -43,6 +43,7 @@ from .system_info import (
 IS_DARWIN = sys.platform == "darwin"
 
 
+# FORK(exo-10gbe-wsl): structural Protocol so pynvml return type is cast-safe under strict pyright
 @runtime_checkable
 class _NvmlMemoryInfo(Protocol):
     """Structural type for the object returned by nvmlDeviceGetMemoryInfo.
@@ -366,6 +367,7 @@ async def _gather_iface_map() -> dict[str, str] | None:
     return ports
 
 
+# FORK(exo-10gbe-wsl): drop pyright suppression on pynvml import now that _NvmlMemoryInfo Protocol exists
 def _has_nvml_cuda() -> bool:
     try:
         import pynvml as nvml
@@ -381,6 +383,7 @@ def _has_nvml_cuda() -> bool:
         return False
 
 
+# FORK(exo-10gbe-wsl): new helper — read GPU VRAM via pynvml; used by _monitor_memory_usage when CUDA is available
 def _cuda_vram_bytes() -> tuple[int, int] | None:
     """Return (total_vram_bytes, free_vram_bytes) for the CUDA device this process uses.
 
@@ -586,6 +589,7 @@ class InfoGatherer:
             if override_memory_env
             else None
         )
+        # FORK(exo-10gbe-wsl): report GPU VRAM (not system RAM) on CUDA nodes; env OVERRIDE_MEMORY_MB still takes precedence
         # Determine once at startup which memory source to use for each poll.
         # Precedence: OVERRIDE_MEMORY_MB > CUDA VRAM > system RAM.
         # CUDA VRAM is only attempted on non-Darwin nodes when no override is set.

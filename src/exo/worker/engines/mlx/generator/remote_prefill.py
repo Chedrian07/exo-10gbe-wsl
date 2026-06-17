@@ -17,6 +17,7 @@ from exo.worker.engines.mlx.types import KVCacheType
 from exo.worker.runner.bootstrap import logger
 
 
+# FORK(exo-10gbe-wsl): multi-rank concurrent fetch + per-rank result merge; replaces single-endpoint sequential fetch
 def remote_prefill(
     prompt_tokens: mx.array,
     cache: KVCacheType,

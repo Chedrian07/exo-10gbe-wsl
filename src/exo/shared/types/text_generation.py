@@ -132,6 +132,7 @@ class TextGenerationTaskParams(BaseModel, frozen=True):
     images: list[Base64Image] = Field(default_factory=list)
     image_hashes: dict[int, Base64ImageHash] = Field(default_factory=dict)
 
+    # FORK(exo-10gbe-wsl): prefill_endpoints list replaces prefill_endpoint str for multi-rank disaggregation
     # One endpoint per rank of the linked prefill instance. A pipeline-parallel
     # prefill instance exposes one server per rank (each holding a disjoint layer
     # range); the decode side fetches from all of them and merges by global layer

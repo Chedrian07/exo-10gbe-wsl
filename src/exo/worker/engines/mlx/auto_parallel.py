@@ -300,6 +300,7 @@ def pipeline_auto_parallel(
         mx.clear_cache()
         yield ModelLoadingResponse(layers_loaded=i, total=total)
 
+    # FORK(exo-10gbe-wsl): skip PipelineFirst/LastLayer wrappers when world_size==1 to avoid unnecessary all_gather and ~2x decode slowdown
     # A single-device instance has no pipeline to coordinate. Wrapping the
     # first/last layers would still execute, per token during decode, a
     # mx.distributed.all_gather plus two forced mx.eval calls in

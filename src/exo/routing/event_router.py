@@ -133,6 +133,7 @@ class EventRouter:
                     if self._nack_cancel_scope:
                         self._nack_cancel_scope.cancel()
 
+                # FORK(exo-10gbe-wsl): kick a NACK even when we drained if a forward gap remains, so cold-join catch-up is immediate
                 # Whether or not we drained anything, if the buffer still holds
                 # events beyond next_idx_to_release there is a forward gap.
                 # Kick a fresh request immediately so cold-join catch-up does not

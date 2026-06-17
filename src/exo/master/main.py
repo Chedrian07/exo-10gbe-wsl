@@ -79,6 +79,7 @@ from exo.utils.event_buffer import MultiSourceBuffer
 from exo.utils.task_group import TaskGroup
 
 
+# FORK(exo-10gbe-wsl): returns all-rank endpoints (list) instead of a single endpoint; validates completeness
 def _prefill_endpoints_for(state: State, decode_instance_id: InstanceId) -> list[str]:
     """Resolve the prefill server endpoints for a decode instance.
 
@@ -236,6 +237,7 @@ class Master:
 
                             decode_instance_id = available_instance_ids[0]
                             task_id = TaskId()
+                            # FORK(exo-10gbe-wsl): inject multi-rank prefill_endpoints list into task params
                             params = command.task_params.model_copy(
                                 update={
                                     "prefill_endpoints": _prefill_endpoints_for(

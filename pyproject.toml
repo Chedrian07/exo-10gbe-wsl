@@ -27,6 +27,7 @@ dependencies = [
   "zstandard>=0.23.0",
   "transformers>=5.6.2",
   "python-daemon>=3.1.2",
+  # FORK(exo-10gbe-wsl): mlx-cuda-13 stack pinned as mandatory linux deps so `uv sync` works on CUDA 13 without extras
   # --- WSL2 / CUDA 13 전용 추론 백엔드 (이 fork 한정) ---
   # 이 fork는 linux-cuda 노드에서 `uv sync`만으로 mlx-cuda 스택이 설치되도록
   # mlx 백엔드를 필수 의존성으로 박는다. 모두 sys_platform == 'linux' 마커라
@@ -108,6 +109,7 @@ mlx-cuda-13 = [
 ]
 mlx-lm = { git = "https://github.com/rltakashige/mlx-lm", branch = "leo/deepseek-v4" }
 mflux = { git = "https://github.com/evanev7/mflux", branch = "exo2" }
+# FORK(exo-10gbe-wsl): collapse torch/torchvision/torchaudio source markers to cu130-only; upstream keeps cpu/cu128/cu130 variants
 # 이 fork는 CUDA 13 전용 → linux torch 스택을 cu130 인덱스로 고정.
 torch = [
   { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },

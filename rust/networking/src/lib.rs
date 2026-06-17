@@ -20,6 +20,7 @@ pub fn is_valid_zid(identity: &str) -> bool {
         && identity.len() <= 32
 }
 
+// FORK(exo-10gbe-wsl): add connect_endpoints parameter for manual peer dialing (WSL2 / no multicast)
 pub fn cfg(
     identity: &str,
     listen_port: u16,

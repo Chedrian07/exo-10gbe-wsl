@@ -125,6 +125,7 @@ class Runner:
         logger.info("runner created")
         self.update_status(RunnerIdle())
 
+    # FORK(exo-10gbe-wsl): multi-rank prefill server — all ranks serve (not just rank 0)
     def _start_prefill_server(self) -> int | None:
         if not ENABLE_DISAGGREGATION:
             return None
@@ -179,6 +180,7 @@ class Runner:
         self._task_reader_thread = threading.Thread(target=loop, name="task-reader")
         self._task_reader_thread.start()
 
+    # FORK(exo-10gbe-wsl): pass shard layer_offset/total_layers so wire carries global layer indices
     def _serve_prefill(self, req: PrefillTask) -> None:
         req.started.set()
         try:

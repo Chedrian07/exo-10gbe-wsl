@@ -69,6 +69,7 @@ impl PyNetworkingHandle {
         namespace: &str,
         listen_port: u16,
         discovery_service_port: u16,
+        // FORK(exo-10gbe-wsl): expose connect_endpoints to Python for WSL2 manual peer dialing
         connect_endpoints: Vec<String>,
     ) -> PyResult<PyNetworkingHandle> {
         // todo: zenoh self assigned peers

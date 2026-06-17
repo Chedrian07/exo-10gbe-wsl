@@ -300,6 +300,7 @@ class SequentialGenerator(Engine):
     def close(self) -> None:
         del self.model, self.tokenizer, self.group
 
+    # FORK(exo-10gbe-wsl): layer_offset/total_layers for pipeline-parallel prefill KV streaming
     def serve_prefill(
         self,
         request: PrefillRequest,
@@ -564,6 +565,7 @@ class BatchGenerator(Engine):
         self._gen.close()
         del self.model, self.tokenizer, self.group
 
+    # FORK(exo-10gbe-wsl): layer_offset/total_layers for pipeline-parallel prefill KV streaming
     def serve_prefill(
         self,
         request: PrefillRequest,

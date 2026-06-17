@@ -349,6 +349,7 @@ def find_ip_prioritised(
     """
     ips = list(_find_connection_ip(node_id, other_node_id, cycle_digraph))
     other_network = node_network.get(other_node_id, NodeNetworkInfo())
+    # FORK(exo-10gbe-wsl): fall back to peer's advertised IPs when no directed edge exists (--no-api / same-host two-GPU)
     if not ips:
         # No directed edge node_id -> other_node_id in the topology. The zenoh
         # session is bidirectional, so the peer is still reachable — fall back to

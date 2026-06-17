@@ -198,6 +198,7 @@ pub async fn create_swarm(
     from_client: mpsc::Receiver<ToSwarm>,
     listen_port: u16,
     discovery_service_port: u16,
+    // FORK(exo-10gbe-wsl): thread connect_endpoints through to cfg() for WSL2 peer dialing
     connect_endpoints: &[String],
 ) -> Result<Swarm> {
     let cfg = crate::cfg(identity, listen_port, connect_endpoints)?;

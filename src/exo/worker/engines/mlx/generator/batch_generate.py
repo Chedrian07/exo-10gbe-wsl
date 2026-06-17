@@ -203,6 +203,7 @@ class ExoBatchGenerator:
             else contextlib.nullcontext()
         )
         uncached_count = len(prompt_tokens)
+        # FORK(exo-10gbe-wsl): prefill_endpoints list replaces single prefill_endpoint for multi-rank dispatch
         use_remote = uncached_count > REMOTE_PREFILL_MIN_TOKENS and bool(
             task_params.prefill_endpoints
         )

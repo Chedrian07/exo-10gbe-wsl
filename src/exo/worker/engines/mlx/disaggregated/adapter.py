@@ -90,6 +90,7 @@ def nhd_to_bhsd(t: mx.array) -> mx.array:
     return mx.expand_dims(mx.transpose(t, (1, 0, 2)), 0)
 
 
+# FORK(exo-10gbe-wsl): layer_offset param so each pipeline-parallel prefill rank emits global layer indices
 def send_mlx_kv_cache(
     stream: BinaryIO,
     caches: KVCacheType,
@@ -215,6 +216,7 @@ def inject_arrays_cache(cache: ArraysCache, blobs: list[TensorBlob]) -> None:
     cache.state = [blob_to_mlx(b) for b in blobs]
 
 
+# FORK(exo-10gbe-wsl): layer_offset/total_layers params for multi-rank pipeline-parallel prefill wire protocol
 def write_cache_to_wire(
     wfile: BinaryIO,
     cache: KVCacheType,

@@ -33,6 +33,7 @@ class FromSwarm:
 
 @typing.final
 class NetworkingHandle:
+    # FORK(exo-10gbe-wsl): added connect_endpoints arg to NetworkingHandle.new() for WSL2 peer dialing
     @staticmethod
     def new(identity: builtins.str, namespace: builtins.str, listen_port: builtins.int, discovery_service_port: builtins.int, connect_endpoints: builtins.list[builtins.str]) -> NetworkingHandle: ...
     def recv(self) -> typing.Awaitable[FromSwarm]: ...

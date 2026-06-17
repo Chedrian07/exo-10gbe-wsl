@@ -39,6 +39,7 @@ class MemoryUsage(FrozenModel):
             swap_available=sm.free,
         )
 
+    # FORK(exo-10gbe-wsl): expose GPU VRAM as placement-visible memory so master doesn't over-count system RAM on CUDA nodes
     @classmethod
     def from_cuda_vram(cls, *, vram_total: int, vram_free: int) -> Self:
         """Construct a MemoryUsage from CUDA GPU VRAM figures.

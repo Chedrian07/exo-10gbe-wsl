@@ -637,6 +637,7 @@ def mlx_generate(
         if vision is not None
         else contextlib.nullcontext()
     )
+    # FORK(exo-10gbe-wsl): prefill_endpoints list replaces single prefill_endpoint for multi-rank dispatch
     use_remote = len(prompt_tokens) > REMOTE_PREFILL_MIN_TOKENS and bool(
         task.prefill_endpoints
     )

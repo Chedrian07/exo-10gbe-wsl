@@ -179,6 +179,7 @@ class ImageEngine(Engine):
         with contextlib.suppress(NameError, AttributeError):
             del self.image_model
 
+    # FORK(exo-10gbe-wsl): updated to match extended Engine.serve_prefill signature (multi-rank prefill)
     def serve_prefill(
         self,
         request: PrefillRequest,

@@ -13,6 +13,7 @@ from exo_rs import (
 @pytest.mark.asyncio
 async def test_sleep_on_multiple_items() -> None:
     print("PYTHON: starting handle")
+    # FORK(exo-10gbe-wsl): pass required namespace and connect_endpoints=[] args added to NetworkingHandle.new()
     h = NetworkingHandle.new(
         os.urandom(16).hex().lstrip("0"), "test-namespace", 52414, 52413, []
     )

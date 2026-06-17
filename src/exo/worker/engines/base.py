@@ -39,6 +39,7 @@ class Engine(ABC):
     @abstractmethod
     def close(self) -> None: ...
 
+    # FORK(exo-10gbe-wsl): extended signature with layer_offset/total_layers for multi-rank prefill
     @abstractmethod
     def serve_prefill(
         self,

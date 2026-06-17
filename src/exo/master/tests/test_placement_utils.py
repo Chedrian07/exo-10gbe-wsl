@@ -134,6 +134,7 @@ def test_filter_multiple_cycles_by_memory():
     # act
     filtered_cycles = filter_cycles_by_memory(cycles, node_memory, Memory.from_kb(1500))
 
+    # FORK(exo-10gbe-wsl): assert updated for bidirectional-cycle semantics — more candidate groups than before
     # assert — connectivity is bidirectional, so every mutually-reachable pair is
     # also a candidate cycle. With a 1500 KB requirement the qualifying groups are
     # {A,C} and {B,C} (1500 KB each) plus {A,B,C} (2000 KB); {A,B} (1000 KB) is out.
@@ -179,6 +180,7 @@ def test_get_smallest_cycles():
     # act
     smallest_cycles = get_smallest_cycles(cycles)
 
+    # FORK(exo-10gbe-wsl): assert updated for bidirectional-cycle semantics — all pairs are smallest, not just A↔B
     # assert — connectivity is bidirectional, so all three mutually-reachable
     # pairs form 2-node cycles, which are the smallest.
     assert all(len(cycle) == 2 for cycle in smallest_cycles)
@@ -189,6 +191,7 @@ def test_get_smallest_cycles():
     }
 
 
+# FORK(exo-10gbe-wsl): new test — verifies that a node with only outbound edges can still join placement rings
 def test_get_cycles_treats_one_directional_edges_as_bidirectional():
     # A node that cannot be HTTP-probed back (e.g. a worker started with --no-api,
     # or two nodes on one host that cannot share an api port) only ever appears as
