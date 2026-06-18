@@ -30,7 +30,7 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-setsid env CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-main \
+setsid env EXO_DEFAULT_MODELS_DIR="$HOME/exo-models" CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-main \
   ENABLE_DISAGGREGATION=true EXO_NO_BATCH=1 \
   uv run exo --namespace "$NAMESPACE" \
   --zenoh-port 52414 --discovery-port 52413 --api-port 52415 \

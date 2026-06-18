@@ -28,7 +28,7 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 echo "Starting GPU1 (4060 Ti) on zenoh :52424 ..."
-setsid env CUDA_VISIBLE_DEVICES=1 EXO_HOME=.exo-gpu1 ENABLE_DISAGGREGATION=true \
+setsid env EXO_DEFAULT_MODELS_DIR="$HOME/exo-models" CUDA_VISIBLE_DEVICES=1 EXO_HOME=.exo-gpu1 ENABLE_DISAGGREGATION=true \
   uv run exo --namespace mycluster --no-api \
   --zenoh-port 52424 --discovery-port 52423 \
   --connect-peer 169.254.150.225:52414,127.0.0.1:52414 &
@@ -38,7 +38,7 @@ GPU1_PGID=$!
 sleep 3
 
 echo "Starting GPU0 (5070 Ti) on zenoh :52414, API :52415 ..."
-setsid env CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-gpu0 ENABLE_DISAGGREGATION=true \
+setsid env EXO_DEFAULT_MODELS_DIR="$HOME/exo-models" CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-gpu0 ENABLE_DISAGGREGATION=true \
   uv run exo --namespace mycluster \
   --zenoh-port 52414 --discovery-port 52413 --api-port 52415 \
   --connect-peer 169.254.150.225:52414,127.0.0.1:52424 &

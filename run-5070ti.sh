@@ -14,7 +14,7 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-setsid env CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-gpu0 ENABLE_DISAGGREGATION=true \
+setsid env EXO_DEFAULT_MODELS_DIR="$HOME/exo-models" CUDA_VISIBLE_DEVICES=0 EXO_HOME=.exo-gpu0 ENABLE_DISAGGREGATION=true \
   uv run exo --namespace mycluster \
   --zenoh-port 52414 --discovery-port 52413 --api-port 52415 \
   --connect-peer 169.254.150.225:52414,127.0.0.1:52424 &
