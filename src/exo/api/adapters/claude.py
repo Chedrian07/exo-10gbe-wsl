@@ -108,25 +108,39 @@ async def handle_image_block(block: ClaudeImageBlock) -> Base64Image | None:
 async def claude_request_to_text_generation(
     request: ClaudeMessagesRequest,
 ) -> TextGenerationTaskParams:
-    # Handle system message
+    # Collect system instructions. The Anthropic spec carries these in the top-level
+    # `system` field, but Claude Code (and some proxies) also place system/developer
+    # blocks inside the `messages` array. Gather from both sources, then fold into one
+    # system prompt that is prepended below — never rendered as a conversational turn.
     instructions: str | None = None
     chat_template_messages: list[dict[str, ChatTemplateValue]] = []
     images: list[Base64Image] = []
 
+    system_parts: list[str] = []
     if request.system:
         if isinstance(request.system, str):
-            instructions = request.system
+            system_parts.append(request.system)
         else:
-            instructions = "".join(block.text for block in request.system)
-
-        instructions = _strip_volatile_headers(instructions)
-        chat_template_messages.append(
-            {"role": "system", "content": InputMessageContent(instructions)}
-        )
+            system_parts.append("".join(block.text for block in request.system))
 
     # Convert messages to input
     input_messages: list[InputMessage] = []
     for msg in request.messages:
+        # A system/developer message inside the array is folded into the system
+        # prompt above, not treated as a user/assistant turn.
+        if msg.role in ("system", "developer"):
+            if isinstance(msg.content, str):
+                system_parts.append(msg.content)
+            else:
+                system_parts.append(
+                    "".join(
+                        block.text
+                        for block in msg.content
+                        if isinstance(block, ClaudeTextBlock)
+                    )
+                )
+            continue
+
         if isinstance(msg.content, str):
             input_messages.append(
                 InputMessage(role=msg.role, content=InputMessageContent(msg.content))
@@ -218,6 +232,16 @@ async def claude_request_to_text_generation(
             if reasoning_content:
                 chat_msg["reasoning_content"] = reasoning_content
             chat_template_messages.append(chat_msg)
+
+    # Merge all collected system text and prepend a single system entry, kept first so
+    # chat templates that require a leading system message render correctly.
+    if system_parts:
+        instructions = _strip_volatile_headers(
+            "\n\n".join(part for part in system_parts if part)
+        )
+        chat_template_messages.insert(
+            0, {"role": "system", "content": InputMessageContent(instructions)}
+        )
 
     # Convert Claude tool definitions to OpenAI-style function tools
     tools: list[dict[str, Any]] | None = None

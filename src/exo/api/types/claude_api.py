@@ -20,6 +20,11 @@ class ClaudeToolDefinition(BaseModel, frozen=True):
 
 # Type aliases
 ClaudeRole = Literal["user", "assistant"]
+# Input messages may also carry a "system"/"developer" role. The Anthropic spec keeps
+# the system prompt in the top-level `system` field, but Claude Code (and some proxies)
+# place system blocks inside the `messages` array. Accept them here and fold them into
+# the system prompt in the adapter instead of rejecting the request with a 422.
+ClaudeInputRole = Literal["user", "assistant", "system", "developer"]
 ClaudeStopReason = Literal["end_turn", "max_tokens", "stop_sequence", "tool_use"]
 
 
@@ -92,7 +97,7 @@ ClaudeInputContentBlock = (
 class ClaudeMessage(BaseModel, frozen=True):
     """Message in Claude Messages API request."""
 
-    role: ClaudeRole
+    role: ClaudeInputRole
     content: str | list[ClaudeInputContentBlock]
 
 

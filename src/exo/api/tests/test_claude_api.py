@@ -150,6 +150,44 @@ class TestClaudeRequestToInternal:
         assert params.stop == ["STOP", "END"]
         assert params.stream is True
 
+    async def test_system_message_in_messages_array(self):
+        # Claude Code places system blocks inside `messages` rather than the top-level
+        # `system` field. They must validate and fold into instructions, not 422.
+        request = ClaudeMessagesRequest.model_validate(
+            {
+                "model": "claude-3-opus",
+                "max_tokens": 100,
+                "messages": [
+                    {"role": "user", "content": "Hello"},
+                    {"role": "system", "content": "Be brief."},
+                ],
+            }
+        )
+        params = await claude_request_to_text_generation(request)
+
+        assert params.instructions == "Be brief."
+        # system is folded out of the conversational turns
+        assert [m.role for m in params.input] == ["user"]
+        assert params.chat_template_messages is not None
+        assert params.chat_template_messages[0]["role"] == "system"
+
+    async def test_system_in_array_merges_with_top_level_system(self):
+        request = ClaudeMessagesRequest.model_validate(
+            {
+                "model": "claude-3-opus",
+                "max_tokens": 100,
+                "system": "Top level.",
+                "messages": [
+                    {"role": "system", "content": "In array."},
+                    {"role": "user", "content": "Hi"},
+                ],
+            }
+        )
+        params = await claude_request_to_text_generation(request)
+
+        assert params.instructions == "Top level.\n\nIn array."
+        assert [m.role for m in params.input] == ["user"]
+
 
 class TestClaudeMessagesRequestValidation:
     """Tests for Claude Messages API request validation."""
