@@ -114,7 +114,7 @@ Extends upstream's single-rank disaggregation so a pipeline-parallel prefill ins
 ## New files — no conflict risk (not in upstream)
 - `FORK.md`, `scripts/sync-upstream.sh`
 - `docs/disaggregated-cuda-prefill.md`
-- `run-5070ti.sh`, `run-4060ti.sh`, `run-both-gpus.sh`, `run-5070ti-solo.sh`
+- `run-main.sh` (default 5070 Ti node, disaggregation on), `run-5070ti.sh`, `run-4060ti.sh`, `run-both-gpus.sh`, `run-5070ti-solo.sh`
 - `src/exo/routing/tests/test_catchup.py`
 - `src/exo/utils/info_gatherer/tests/test_cuda_vram.py`
 - `src/exo/worker/engines/mlx/disaggregated/tests/test_multirank_prefill.py`
